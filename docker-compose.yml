@@ -1,0 +1,136 @@
+services:
+
+  vehicle-postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: vehicle_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - vehicle-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d vehicle_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  vehicle-service:
+    build:
+      context: ./backend/vehicle-service
+    image: vehicle-service:1.0
+    expose:
+      - "8081"
+    environment:
+      DB_URL: jdbc:postgresql://vehicle-postgres:5432/vehicle_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+    depends_on:
+      vehicle-postgres:
+        condition: service_healthy
+    networks:
+      - vehicle-network
+
+  alert-service:
+    build:
+      context: ./backend/alert-service
+    image: alert-service:1.0
+    expose:
+      - "8083"
+    environment:
+      DB_URL: jdbc:postgresql://vehicle-postgres:5432/vehicle_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+    depends_on:
+      vehicle-postgres:
+        condition: service_healthy
+    networks:
+      - vehicle-network
+
+  telemetry-service:
+    build:
+      context: ./backend/telemetry-service
+    image: telemetry-service:1.0
+    expose:
+      - "8082"
+    environment:
+      DB_URL: jdbc:postgresql://vehicle-postgres:5432/vehicle_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      VEHICLE_SERVICE_URL: http://vehicle-service:8081
+      ALERT_SERVICE_URL: http://alert-service:8083
+    depends_on:
+      vehicle-postgres:
+        condition: service_healthy
+      vehicle-service:
+        condition: service_started
+      alert-service:
+        condition: service_started
+    networks:
+      - vehicle-network
+
+  notification-service:
+    build:
+      context: ./backend/notification-service
+    image: notification-service:1.0
+    expose:
+      - "8084"
+    environment:
+      DB_URL: jdbc:postgresql://vehicle-postgres:5432/vehicle_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      ALERT_SERVICE_URL: http://alert-service:8083
+    depends_on:
+      vehicle-postgres:
+        condition: service_healthy
+      alert-service:
+        condition: service_started
+    networks:
+      - vehicle-network
+
+  user-service:
+    build:
+      context: ./backend/user-service
+    image: user-service:1.0
+    expose:
+      - "8085"
+    environment:
+      DB_URL: jdbc:postgresql://vehicle-postgres:5432/vehicle_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+    depends_on:
+      vehicle-postgres:
+        condition: service_healthy
+    networks:
+      - vehicle-network
+
+  vehicle-frontend:
+    build:
+      context: ./frontend
+    image: vehicle-frontend:1.0
+    ports:
+      - "3000:80"
+    depends_on:
+      vehicle-service:
+        condition: service_started
+      telemetry-service:
+        condition: service_started
+      alert-service:
+        condition: service_started
+      notification-service:
+        condition: service_started
+      user-service:
+        condition: service_started
+    networks:
+      - vehicle-network
+
+volumes:
+  postgres_data:
+
+networks:
+  vehicle-network:
+    driver: bridge

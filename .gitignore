@@ -26,3 +26,13 @@ Thumbs.db
 
 # Environment files
 .env
+# Build artifacts
+*.jar
+*.war
+
+# Node.js dependencies
+node_modules/
+
+# Frontend build output
+dist/
+build/
