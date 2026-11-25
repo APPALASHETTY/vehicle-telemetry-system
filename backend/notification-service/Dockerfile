@@ -1,22 +1,21 @@
-# Stage 1: Build
-FROM eclipse-temurin:21-jdk AS builder
+# ---------- Stage 1: Application Artifact ----------
+FROM eclipse-temurin:21-jre AS artifact
 
 WORKDIR /app
 
-COPY . .
-
-RUN chmod +x mvnw
-
-RUN ./mvnw clean package -DskipTests
+# Copy pre-built JAR downloaded from Nexus
+COPY app.jar /app/app.jar
 
 
-# Stage 2: Run
-FROM eclipse-temurin:21-jre
+# ---------- Stage 2: Runtime ----------
+FROM eclipse-temurin:21-jre AS runtime
 
 WORKDIR /app
 
-COPY --from=builder /app/target/*.jar app.jar
+# Copy application artifact from Stage 1
+COPY --from=artifact /app/app.jar /app/app.jar
 
 EXPOSE 8084
 
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+
